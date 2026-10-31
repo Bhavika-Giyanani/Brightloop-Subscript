@@ -22,6 +22,10 @@ The app is available at `http://localhost:3000`. Interactive API documentation i
 
 Password reset links are sent by SMTP. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`, and any required `SMTP_USER` / `SMTP_PASSWORD` values. Set `APP_URL` to the public frontend origin so reset links point to the right deployment. Reset requests return an explicit configuration error if SMTP is not configured.
 
+Only admins and staff can record payments, and each payment must settle the invoice's full outstanding balance. Configure `COMPANY_NAME` if new staff profiles should use a company name.
+
+Active subscriptions renew automatically only when their plan allows renewal. Plans that disallow renewal close after their configured `autoCloseDays` grace period. Pausing preserves billing dates; due invoices are caught up after the subscription resumes.
+
 ## Build
 
 ```bash

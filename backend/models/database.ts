@@ -895,6 +895,16 @@ export function calculateBillingNextDate(currentDateStr: string, frequency: Bill
   return date.toISOString().split('T')[0];
 }
 
+function addDays(currentDateStr: string, days: number): string {
+  const [year, month, day] = currentDateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.toISOString().split('T')[0] !== currentDateStr) {
+    throw new RangeError(`Invalid billing date: ${currentDateStr}`);
+  }
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().split('T')[0];
+}
+
 export function runRecurringBilling(): { processed: number; generatedInvoices: Invoice[] } {
   const db = loadDatabase();
   const today = new Date().toISOString().split('T')[0];
@@ -906,10 +916,34 @@ export function runRecurringBilling(): { processed: number; generatedInvoices: I
       continue;
     }
 
+    const plan = db.plans.find(candidate => candidate.id === sub.planId);
+    if (!plan) continue;
+    if (!plan.allowRenewal) {
+      const autoCloseDate = addDays(sub.expiryDate, plan.autoCloseDays);
+      if (today >= autoCloseDate) {
+        const now = new Date().toISOString();
+        sub.status = 'CLOSED';
+        sub.isPaused = false;
+        sub.updatedAt = now;
+        sub.history.push({
+          id: `hist-${randomUUID()}`,
+          subscriptionId: sub.id,
+          action: 'Automatically closed after the plan term and grace period.',
+          fromStatus: 'ACTIVE',
+          toStatus: 'CLOSED',
+          performedBy: 'System Recurring Engine',
+          timestamp: now,
+          notes: `Plan renewal is disabled; the ${plan.autoCloseDays}-day grace period ended on ${autoCloseDate}.`
+        });
+        changed = true;
+        continue;
+      }
+      if (sub.nextBillingDate >= sub.expiryDate) continue;
+    }
+
     // Check if nextBillingDate is due (<= today)
     if (sub.nextBillingDate <= today) {
-      const plan = db.plans.find(p => p.id === sub.planId);
-      const frequency = plan ? plan.billingFrequency : 'MONTHLY';
+      const frequency = plan.billingFrequency;
 
       const billingStart = sub.nextBillingDate;
       const billingEnd = calculateBillingNextDate(billingStart, frequency);
@@ -1041,6 +1075,7 @@ export function runRecurringBilling(): { processed: number; generatedInvoices: I
 
         // Advance nextBillingDate
         sub.nextBillingDate = billingEnd;
+        sub.expiryDate = billingEnd;
         sub.updatedAt = new Date().toISOString();
         changed = true;
         sub.history.push({
@@ -1054,6 +1089,7 @@ export function runRecurringBilling(): { processed: number; generatedInvoices: I
       } else {
         // Already invoiced, advance next billing date so it does not loop
         sub.nextBillingDate = billingEnd;
+        sub.expiryDate = billingEnd;
         sub.updatedAt = new Date().toISOString();
         changed = true;
       }

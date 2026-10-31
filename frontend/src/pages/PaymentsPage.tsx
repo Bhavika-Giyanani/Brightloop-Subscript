@@ -95,8 +95,8 @@ export const PaymentsPage: React.FC = () => {
       error('Payment amount must be greater than zero');
       return;
     }
-    if (amount > inv.outstandingAmount + 0.01) {
-      error(`Payment amount cannot exceed outstanding balance of ₹${inv.outstandingAmount.toFixed(2)}`);
+    if (amount !== inv.outstandingAmount) {
+      error(`Payment amount must settle the full outstanding balance of ₹${inv.outstandingAmount.toFixed(2)}`);
       return;
     }
 
@@ -287,7 +287,7 @@ export const PaymentsPage: React.FC = () => {
                 >
                   <option value="">-- Choose Invoice --</option>
                   {invoices
-                    .filter(i => i.status !== 'CANCELLED' && i.outstandingAmount > 0)
+                    .filter(i => i.status === 'CONFIRMED' && i.outstandingAmount > 0)
                     .map(inv => {
                       const c = customers.find(cust => cust.id === inv.customerId);
                       return (
@@ -318,9 +318,11 @@ export const PaymentsPage: React.FC = () => {
                     min="1"
                     max={selectedInvObj ? selectedInvObj.outstandingAmount : 9999999}
                     value={amount}
-                    onChange={e => setAmount(parseFloat(e.target.value) || 0)}
+                    readOnly
+                    aria-readonly="true"
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-900 font-mono font-bold"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">Full balance required.</p>
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">

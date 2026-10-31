@@ -283,7 +283,7 @@ export const InvoicesPage: React.FC = () => {
                             <Download className="w-3.5 h-3.5" />
                             PDF
                           </button>
-                          {user?.role !== 'CUSTOMER' && inv.outstandingAmount > 0 && inv.status !== 'CANCELLED' && (
+                          {user?.role !== 'CUSTOMER' && inv.outstandingAmount > 0 && inv.status === 'CONFIRMED' && (
                             <button
                               onClick={() => openPaymentModal(inv)}
                               className="px-2.5 py-1.5 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold text-xs transition-colors flex items-center gap-1"
@@ -327,12 +327,20 @@ export const InvoicesPage: React.FC = () => {
                 >
                   <Printer className="w-3.5 h-3.5" /> Print
                 </button>
-                {user?.role !== 'CUSTOMER' && selectedInvoice.outstandingAmount > 0 && (
+                {user?.role !== 'CUSTOMER' && selectedInvoice.outstandingAmount > 0 && selectedInvoice.status === 'CONFIRMED' && (
                   <button
                     onClick={() => openPaymentModal(selectedInvoice)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
                   >
                     <CreditCard className="w-3.5 h-3.5" /> Record Payment
+                  </button>
+                )}
+                {user?.role !== 'CUSTOMER' && selectedInvoice.status === 'DRAFT' && (
+                  <button
+                    onClick={() => handleUpdateStatus(selectedInvoice.id, 'CONFIRMED')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Confirm Invoice
                   </button>
                 )}
                 {user?.role !== 'CUSTOMER' && selectedInvoice.status === 'CONFIRMED' && (
@@ -539,11 +547,12 @@ export const InvoicesPage: React.FC = () => {
                   min="1"
                   max={payingInvoice.outstandingAmount}
                   value={payAmount}
-                  onChange={e => setPayAmount(parseFloat(e.target.value) || 0)}
+                  readOnly
+                  aria-readonly="true"
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-900 font-mono font-bold text-sm"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Supports partial payments. Maximum allowed: ₹{payingInvoice.outstandingAmount.toFixed(2)}
+                  The invoice must be paid in full: ₹{payingInvoice.outstandingAmount.toFixed(2)}
                 </p>
               </div>
 

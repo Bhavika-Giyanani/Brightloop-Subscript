@@ -1507,10 +1507,11 @@ app.get('/api/invoices/:id', authenticateToken, (req: AuthenticatedRequest, res:
 });
 
 app.post('/api/invoices', authenticateToken, requireRoles(['SUPER_ADMIN', 'INTERNAL_STAFF']), (req: AuthenticatedRequest, res: Response) => {
-  const { customerId, subscriptionId, invoiceDate, dueDate, billingPeriodStart, billingPeriodEnd, lines, taxIds = [], discountId, notes } = req.body || {};
+  const { customerId, subscriptionId, invoiceDate, dueDate, billingPeriodStart, billingPeriodEnd, lines, taxIds = [], discountId, notes, status = 'DRAFT' } = req.body || {};
   if (typeof customerId !== 'string' || !Array.isArray(lines) || lines.length === 0
     || !Array.isArray(taxIds) || taxIds.some((id: unknown) => typeof id !== 'string')
-    || (notes !== undefined && typeof notes !== 'string')) {
+    || (notes !== undefined && typeof notes !== 'string')
+    || !['DRAFT', 'CONFIRMED'].includes(status)) {
     return res.status(400).json({ error: 'Customer and invoice lines are required.' });
   }
 
@@ -1645,7 +1646,7 @@ app.post('/api/invoices', authenticateToken, requireRoles(['SUPER_ADMIN', 'INTER
     totalAmount,
     paidAmount: 0,
     outstandingAmount: totalAmount,
-    status: 'CONFIRMED',
+    status,
     notes: notes || '',
     createdAt: now,
     updatedAt: now
@@ -1726,10 +1727,9 @@ app.post('/api/payments', authenticateToken, requireRoles(['SUPER_ADMIN', 'INTER
     return res.status(400).json({ error: 'Payments can only be recorded against confirmed invoices with an outstanding balance.' });
   }
 
-  // Prevent payment amount exceeding outstanding balance
-  if (payAmount > Number((invoice.outstandingAmount + 0.01).toFixed(2))) {
+  if (payAmount !== Number(invoice.outstandingAmount.toFixed(2))) {
     return res.status(400).json({
-      error: `Payment amount (₹${payAmount}) cannot exceed outstanding balance of ₹${invoice.outstandingAmount.toFixed(2)}.`
+      error: `Payment amount must settle the full outstanding balance of ₹${invoice.outstandingAmount.toFixed(2)}.`
     });
   }
 

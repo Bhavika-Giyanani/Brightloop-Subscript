@@ -151,6 +151,63 @@ test('auth endpoints validate input, seed demo accounts, and enforce customer da
       1
     );
 
+    const activePlan = seededDb.plans.find(plan => plan.id === dueSubscription.planId);
+    assert.ok(activePlan);
+    const noRenewalPlan = {
+      ...activePlan,
+      id: 'test-no-renewal-plan',
+      allowRenewal: false,
+      autoCloseDays: 5
+    };
+    const noRenewalSubscription = {
+      ...dueSubscription,
+      id: 'test-no-renewal-subscription',
+      subscriptionNumber: 'SUB-TEST-NO-RENEWAL',
+      planId: noRenewalPlan.id,
+      expiryDate: billingDate,
+      nextBillingDate: billingDate,
+      discountId: undefined,
+      discountAmount: 0,
+      taxIds: [],
+      taxAmount: 0,
+      history: []
+    };
+    const pausedSubscription = {
+      ...dueSubscription,
+      id: 'test-paused-subscription',
+      subscriptionNumber: 'SUB-TEST-PAUSED',
+      nextBillingDate: billingDate,
+      isPaused: true,
+      discountId: undefined,
+      discountAmount: 0,
+      taxIds: [],
+      taxAmount: 0,
+      history: []
+    };
+    seededDb.plans.push(noRenewalPlan);
+    seededDb.subscriptions.push(noRenewalSubscription, pausedSubscription);
+    saveDatabase(seededDb);
+    runRecurringBilling();
+    assert.equal(noRenewalSubscription.status, 'ACTIVE');
+    assert.equal(pausedSubscription.nextBillingDate, billingDate);
+    assert.equal(
+      loadDatabase().invoices.some(invoice => invoice.subscriptionId === noRenewalSubscription.id || invoice.subscriptionId === pausedSubscription.id),
+      false
+    );
+
+    noRenewalSubscription.expiryDate = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
+    noRenewalSubscription.nextBillingDate = noRenewalSubscription.expiryDate;
+    saveDatabase(seededDb);
+    runRecurringBilling();
+    assert.equal(noRenewalSubscription.status, 'CLOSED');
+    pausedSubscription.isPaused = false;
+    saveDatabase(seededDb);
+    const resumedBilling = runRecurringBilling();
+    assert.equal(
+      resumedBilling.generatedInvoices.some(invoice => invoice.subscriptionId === pausedSubscription.id && invoice.billingPeriodStart === billingDate),
+      true
+    );
+
     const payableInvoice = loadDatabase().invoices.find(invoice => invoice.status === 'CONFIRMED' && invoice.outstandingAmount > 1);
     assert.ok(payableInvoice);
     const originalOutstandingAmount = payableInvoice.outstandingAmount;
@@ -161,11 +218,10 @@ test('auth endpoints validate input, seed demo accounts, and enforce customer da
       paymentDate: new Date().toISOString().slice(0, 10),
       notes: 'Integration test partial payment'
     }, validSeedLogin.data.token);
-    assert.equal(partialPayment.response.status, 201);
-    assert.equal(partialPayment.data.invoice.outstandingAmount, Number((originalOutstandingAmount - 1).toFixed(2)));
+    assert.equal(partialPayment.response.status, 400);
     const remainingPayment = await request('/api/payments', 'POST', {
       invoiceId: payableInvoice.id,
-      amount: partialPayment.data.invoice.outstandingAmount,
+      amount: originalOutstandingAmount,
       paymentMethod: 'BANK_TRANSFER'
     }, validSeedLogin.data.token);
     assert.equal(remainingPayment.response.status, 201);
@@ -215,6 +271,7 @@ test('auth endpoints validate input, seed demo accounts, and enforce customer da
       }]
     }, validSeedLogin.data.token);
     assert.equal(calculatedInvoice.response.status, 201);
+    assert.equal(calculatedInvoice.data.status, 'DRAFT');
     assert.equal(calculatedInvoice.data.subtotal, 2560);
     assert.equal(calculatedInvoice.data.discountBreakdown.amount, 256);
     assert.equal(calculatedInvoice.data.lines[0].discountAmount, 256);
@@ -236,6 +293,11 @@ test('auth endpoints validate input, seed demo accounts, and enforce customer da
       }]
     }, validSeedLogin.data.token);
     assert.equal(usedDiscountAgain.response.status, 400);
+    const confirmedPricingInvoice = await request(`/api/invoices/${calculatedInvoice.data.id}/status`, 'PATCH', {
+      status: 'CONFIRMED'
+    }, validSeedLogin.data.token);
+    assert.equal(confirmedPricingInvoice.response.status, 200);
+    assert.equal(confirmedPricingInvoice.data.status, 'CONFIRMED');
 
     for (const invalidPassword of ['Abcdefg!', 'abcdefgh!', 'ABCDEFGH!', 'Abcdefgh1']) {
       const registration = await request('/api/auth/register', 'POST', {
