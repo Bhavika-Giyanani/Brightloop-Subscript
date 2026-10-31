@@ -1,0 +1,8 @@
+{
+  "name": "Brightloop Subscription Management System",
+  "description": "Enterprise-grade Subscription, Invoicing, Billing, and Financial Management platform for Brightloop Software.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
